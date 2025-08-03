@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './Carousel.scss';
 
 type Props = {
@@ -13,32 +13,78 @@ const Carousel: React.FC<Props> = ({ images, infinite = false }) => {
   const [animationDuration, setAnimationDuration] = useState(1000);
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Para modo infinito, precisamos de um índice interno que pode ir além do tamanho original
+  const [internalIndex, setInternalIndex] = useState(0);
+
+  // Reset do índice interno quando as configurações mudam
+  useEffect(() => {
+    setInternalIndex(0);
+    setCurrentIndex(0);
+  }, [frameSize, step]);
+
   // Lógica para navegação "Next"
   const handleNext = () => {
-    setCurrentIndex(prevIndex => {
-      if (infinite) {
-        return (prevIndex + step) % images.length;
-      }
-
-      return Math.min(prevIndex + step, images.length - frameSize);
-    });
+    if (infinite) {
+      setInternalIndex(prevIndex => prevIndex + step);
+      setCurrentIndex(prevIndex => (prevIndex + step) % images.length);
+    } else {
+      setCurrentIndex(prevIndex =>
+        Math.min(prevIndex + step, images.length - frameSize),
+      );
+    }
   };
 
   // Lógica para navegação "Prev"
   const handlePrev = () => {
-    setCurrentIndex(prevIndex => {
-      if (infinite) {
-        return (prevIndex - step + images.length) % images.length;
-      }
-
-      return Math.max(prevIndex - step, 0);
-    });
+    if (infinite) {
+      setInternalIndex(prevIndex => prevIndex - step);
+      setCurrentIndex(
+        prevIndex => (prevIndex - step + images.length) % images.length,
+      );
+    } else {
+      setCurrentIndex(prevIndex => Math.max(prevIndex - step, 0));
+    }
   };
 
-  // Slice das imagens visíveis
-  const visibleImages = infinite
-    ? [...images, ...images].slice(currentIndex, currentIndex + frameSize)
-    : images.slice(currentIndex, currentIndex + frameSize);
+  // Para modo infinito, criamos uma lista triplicada para garantir transições suaves
+  const getCarouselImages = () => {
+    if (infinite) {
+      // Triplicamos as imagens para garantir que sempre temos imagens suficientes
+      return [...images, ...images, ...images];
+    }
+
+    return images;
+  };
+
+  // Calculamos o índice de início baseado no índice interno
+  const getStartIndex = () => {
+    if (infinite) {
+      return internalIndex;
+    }
+
+    return currentIndex;
+  };
+
+  // Calculamos a transformação CSS
+  const getTransform = () => {
+    if (infinite) {
+      // Para modo infinito, calculamos a transformação baseada no índice interno
+      // mas ajustamos para manter a visualização correta
+      const offset = (internalIndex % images.length) * itemWidth;
+
+      return `translateX(-${offset}px)`;
+    }
+
+    return `translateX(-${currentIndex * itemWidth}px)`;
+  };
+
+  // Obtemos as imagens visíveis
+  const carouselImages = getCarouselImages();
+  const startIndex = getStartIndex();
+  const visibleImages = carouselImages.slice(
+    startIndex,
+    startIndex + frameSize,
+  );
 
   return (
     <div className="Carousel">
@@ -81,6 +127,15 @@ const Carousel: React.FC<Props> = ({ images, infinite = false }) => {
             onChange={e => setAnimationDuration(+e.target.value)}
           />
         </label>
+
+        <label>
+          Modo infinito:
+          <input
+            type="checkbox"
+            checked={infinite}
+            onChange={() => {}} // Read-only para demonstração
+          />
+        </label>
       </div>
 
       {/* Carrossel */}
@@ -94,17 +149,17 @@ const Carousel: React.FC<Props> = ({ images, infinite = false }) => {
           className="Carousel__list"
           style={{
             transition: `transform ${animationDuration}ms ease-in-out`,
-            transform: `translateX(-${currentIndex * itemWidth}px)`,
+            transform: getTransform(),
           }}
         >
           {visibleImages.map((image, index) => (
             <li
-              key={index}
+              key={`${startIndex}-${index}`}
               style={{
                 width: `${itemWidth}px`,
               }}
             >
-              <img src={image} alt={`Image ${index}`} />
+              <img src={image} alt={`Image ${startIndex + index}`} />
             </li>
           ))}
         </ul>
@@ -119,6 +174,15 @@ const Carousel: React.FC<Props> = ({ images, infinite = false }) => {
           Next
         </button>
       </div>
+
+      {/* Informações de debug */}
+      {infinite && (
+        <div className="Carousel__debug">
+          <p>Índice interno: {internalIndex}</p>
+          <p>Índice atual: {currentIndex}</p>
+          <p>Índice de início: {startIndex}</p>
+        </div>
+      )}
     </div>
   );
 };
